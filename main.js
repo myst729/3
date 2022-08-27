@@ -4,6 +4,10 @@ import { GUI } from 'three/examples/jsm/libs/lil-gui.module.min.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
+import { PixelShader } from 'three/examples/jsm/shaders/PixelShader.js'
 
 (async () => {
   // stats.js
@@ -83,6 +87,30 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
   spotLight.shadowDarkness = 0.3
   scene.add(spotLight)
 
+  // renderer
+  const renderer = new THREE.WebGLRenderer({ antialias: true, canvas })
+  renderer.shadowMapEnabled = true
+  renderer.setSize(screenW, screenH)
+  renderer.setAnimationLoop((time) => {
+    stats.begin()
+    controls.update()
+    renderer.render(scene, camera)
+    pixelPass.uniforms['pixelSize'].value = pixelOptions.size
+    if (pixelOptions.enable) {
+      composer.render()
+    }
+    stats.end()
+  })
+
+  // shader
+  const pixelOptions = { size: 8, enable: true }
+  const composer = new EffectComposer(renderer)
+  composer.addPass(new RenderPass(scene, camera))
+  const pixelPass = new ShaderPass(PixelShader)
+  pixelPass.uniforms['resolution'].value = new THREE.Vector2(screenW, screenH)
+  pixelPass.uniforms['resolution'].value.multiplyScalar(window.devicePixelRatio)
+  composer.addPass(pixelPass)
+
   // dat.gui
   const gui = new GUI()
   // const cameraFolder = gui.addFolder('Camera')
@@ -110,17 +138,18 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
   lightFolder.add(spotLight.position, 'y', 0, 100)
   lightFolder.add(spotLight.position, 'z', 0, 50)
   lightFolder.open()
+  const pixelFolder = gui.addFolder('Pixel Shader')
+  pixelFolder.add(pixelOptions, 'size', 2, 32)
+  pixelFolder.add(pixelOptions, 'enable')
+  // pixelFolder.add(spotLight.position, 'y', 0, 100)
+  pixelFolder.open()
 
-  // renderer
-  const renderer = new THREE.WebGLRenderer({ antialias: true, canvas })
-  renderer.shadowMapEnabled = true
-  renderer.setSize(screenW, screenH)
-  renderer.setAnimationLoop((time) => {
-    stats.begin()
-    controls.update()
-    renderer.render(scene, camera)
-    stats.end()
-  })
+  window.addEventListener('resize', (e) => {
+    camera.aspect = screenW / screenH
+    camera.updateProjectionMatrix()
+    renderer.setSize(screenW, screenH)
+    pixelPass.uniforms['resolution'].value.set(screenW, screenH).multiplyScalar(window.devicePixelRatio)
+  }, false)
 
   console.log({ scene })
 })()
